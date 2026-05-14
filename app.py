@@ -1065,6 +1065,7 @@ def login_page():
 # ==============================================================================
 # ==============================================================================
 def public_case_submission():
+    scroll_to_top()
     """واجهة تقديم الحالات للعامة — بدون تسجيل دخول."""
     inject_css()
     ensure_new_cases_file()
@@ -1353,6 +1354,7 @@ def public_case_submission():
 # ─── ADMIN REGISTER PAGE (inside admin dashboard) ─────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 def admin_register_page():
+    scroll_to_top()
     st.markdown(f"""
     <div class="main-header">
         <div>
@@ -1403,6 +1405,7 @@ def admin_register_page():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def admin_home(df, models):
+    scroll_to_top()
     st.markdown(f"""
     <div class="main-header">
         <div>
@@ -1561,6 +1564,7 @@ def admin_home(df, models):
 
 
 def admin_cases(df):
+    scroll_to_top()
     # ── اختيار مصدر البيانات ──
     if "cases_source" not in st.session_state:
         st.session_state.cases_source = "main"
@@ -1800,6 +1804,7 @@ def admin_cases(df):
 
 
 def admin_add_case(df, models):
+    scroll_to_top()
     st.markdown(f"""
     <div class="main-header">
         <div>
@@ -2048,6 +2053,7 @@ def admin_add_case(df, models):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def donor_stats(df):
+    scroll_to_top()
     st.markdown(f"""
     <div class="main-header">
         <div>
@@ -2093,6 +2099,7 @@ def donor_stats(df):
 
 
 def donor_map(df):
+    scroll_to_top()
     st.markdown(f"""
     <div class="main-header">
         <div>
@@ -2188,6 +2195,7 @@ def donor_map(df):
 
 
 def donor_donate():
+    scroll_to_top()
     st.markdown(f"""
     <div class="main-header">
         <div>
@@ -2335,6 +2343,16 @@ def donor_donate():
 # ═══════════════════════════════════════════════════════════════════════════════
 # ─── MAIN APP ─────────────────────────────────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def scroll_to_top():
+    st.markdown(
+        """<script>
+        window.parent.document.querySelector('[data-testid="stAppViewContainer"]')
+        ?.scrollTo({top: 0, behavior: 'instant'});
+        window.parent.scrollTo(0, 0);
+        </script>""",
+        unsafe_allow_html=True
+    )
 
 def main():
     inject_css()
