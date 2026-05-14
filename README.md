@@ -6,7 +6,6 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
 [![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org)
-[![Streamlit App](https://img.shields.io/badge/Streamlit_App-Live_Demo-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)]([رابط_موقعك_هنا](https://sanad-ai.streamlit.app/))
 
 > An AI-powered social welfare platform that uses **Gaussian Mixture Model (GMM) clustering** to automatically classify needy families by vulnerability level — enabling NGOs and aid organizations to prioritize and allocate resources more effectively.
 
@@ -126,17 +125,32 @@ The system is architecturally ready to plug in real data from organizations like
 
 ## Screenshots
 
-| Login Page | Admin Dashboard |
-|---|---|
-| ![login](screenshots/Login.png) | ![dashboard](screenshots/Dashboard.png) |
-
-| Case Management | Donor Statistics |
-|---|---|
-| ![cases](screenshots/Management.png) | ![Donor_Statistics](screenshots/Statistics.png) |
-
-| Donation page | Need Map |
-|---|---|
-| ![donor](screenshots/Donation.png) | ![map](screenshots/Map.png) |
+<table style="width:100%; text-align:center;">
+  <tr>
+    <th>Login Page</th>
+    <th>Admin Dashboard</th>
+  </tr>
+  <tr>
+    <td><img src="screenshots/Login.png" width="400"></td>
+    <td><img src="screenshots/Dashboard.png" width="400"></td>
+  </tr>
+  <tr>
+    <th>Case Management</th>
+    <th>Donor Statistics</th>
+  </tr>
+  <tr>
+    <td><img src="screenshots/Management.png" width="400"></td>
+    <td><img src="screenshots/Statistics.png" width="400"></td>
+  </tr>
+  <tr>
+    <th>Donation Page</th>
+    <th>Need Map</th>
+  </tr>
+  <tr>
+    <td><img src="screenshots/Donation.png" width="400"></td>
+    <td><img src="screenshots/Map.png" width="400"></td>
+  </tr>
+</table>
 
 ---
 
