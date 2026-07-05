@@ -98,7 +98,17 @@ def ensure_new_cases_file():
     ]
     if not os.path.exists(NEW_CASES_FILE):
         pd.DataFrame(columns=cols).to_csv(NEW_CASES_FILE, index=False)
+        
 
+@st.cache_data
+def load_new_cases():
+    """تحميل الحالات الجديدة مع caching لتسريع القراءة."""
+    try:
+        df = pd.read_csv(NEW_CASES_FILE, dtype={"ssn": str})
+        df["ssn"] = df["ssn"].str.replace(".0", "", regex=False).str.strip()
+        return df
+    except Exception:
+        return pd.DataFrame()
 # ════════════════════════════════════════════════════════════════════════════
 # FIX 1: load_models — بنجرب joblib الأول، لو فشل بنجرب pickle
 # ════════════════════════════════════════════════════════════════════════════
@@ -803,6 +813,7 @@ def inject_css():
     .stApp > section:first-child * {{
         direction: {'rtl' if LANG == 'ar' else 'ltr'} !important;
     }}
+
     /* استثناء الـ sidebar wrapper نفسه */
     .stApp > section[data-testid="stSidebar"] {{
         direction: ltr !important;
@@ -897,10 +908,14 @@ def make_cluster_pie(df):
                  color_discrete_sequence=colors,
                  hole=0.45,
                  title=t("توزيع الحالات حسب الأولوية", "Case Distribution by Priority"))
-    fig.update_layout(font_family="Cairo" if LANG=="ar" else "Poppins",
-                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      legend=dict(orientation="h", y=-0.1),
-                      margin=dict(t=50, b=20))
+    fig.update_layout(
+        font_family="Cairo" if LANG == "ar" else "Poppins",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", y=-0.15),
+        margin=dict(t=50, b=40, l=20, r=20),
+        height=420,   # ⬅️ نفس ارتفاع باقي الشارتس
+    )
     return fig
 
 def make_gov_bar(df):
@@ -909,14 +924,38 @@ def make_gov_bar(df):
         return None
     gov = df["governorate"].value_counts().head(10).reset_index()
     gov.columns = ["gov", "count"]
+ 
     fig = px.bar(gov, x="count", y="gov", orientation="h",
                  color="count", color_continuous_scale="Blues",
                  title=t("أعلى 10 محافظات (عدد الحالات)", "Top 10 Governorates by Cases"))
-    fig.update_layout(font_family="Cairo" if LANG=="ar" else "Poppins",
-                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      showlegend=False, yaxis_title="", xaxis_title=t("عدد الحالات","Cases"),
-                      margin=dict(t=50, b=20))
+ 
+    fig.update_layout(
+        font_family="Cairo" if LANG == "ar" else "Poppins",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        showlegend=False,
+        yaxis_title="",
+        xaxis_title=t("عدد الحالات", "Cases"),
+ 
+        # ── ده اللي بيحل مشكلة قص الأسماء على المحور Y ──
+        margin=dict(t=50, b=40, l=10, r=10),
+        height=480,  # ارتفاع كافي لعرض كل 10 محافظات براحة
+ 
+        yaxis=dict(
+            automargin=True,      # يخلي بلوتلي يوسع المساحة تلقائي عشان الاسم الطويل
+            tickfont=dict(size=13),
+        ),
+        xaxis=dict(
+            automargin=True,      # يضمن ظهور كل الأرقام على محور X من غير قطع
+        ),
+    )
     fig.update_coloraxes(showscale=False)
+ 
+    # يخلي أطول اسم بار (زي Cairo/Giza) يظهر بالكامل فوق من غير قطع
+    fig.update_traces(
+        cliponaxis=False
+    )
+ 
     return fig
 
 def make_income_hist(df):
@@ -943,10 +982,18 @@ def make_family_size_box(df):
                  color="cluster_label",
                  color_discrete_map={get_cluster_info(c, LANG)["name"]: get_cluster_info(c, LANG)["color"] for c in range(4)},
                  title=t("حجم الأسرة حسب التصنيف", "Family Size by Cluster"))
-    fig.update_layout(font_family="Cairo" if LANG=="ar" else "Poppins",
-                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      showlegend=False, xaxis_title="", yaxis_title=t("حجم الأسرة","Family Size"),
-                      margin=dict(t=50, b=20))
+    fig.update_layout(
+        font_family="Cairo" if LANG == "ar" else "Poppins",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        showlegend=False,
+        xaxis_title="",
+        yaxis_title=t("حجم الأسرة", "Family Size"),
+        margin=dict(t=50, b=100, l=40, r=20),
+        height=420,
+        xaxis=dict(automargin=True, tickangle=-30, tickfont=dict(size=12)),
+        yaxis=dict(automargin=True),
+    )
     return fig
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1565,7 +1612,6 @@ def admin_home(df, models):
 
 def admin_cases(df):
     scroll_to_top()
-    # ── اختيار مصدر البيانات ──
     if "cases_source" not in st.session_state:
         st.session_state.cases_source = "main"
 
@@ -1575,85 +1621,57 @@ def admin_cases(df):
             <h1> {t('إدارة الحالات', 'Case Management')}</h1>
             <p>{t('عرض وبحث في جميع الحالات المسجلة', 'View and search all registered cases')}</p>
         </div>
-        <div style="display:flex; gap:12px; align-items:center;">
-            <div id="src-btns" style="display:flex; gap:10px;">
+    </div>
     """, unsafe_allow_html=True)
 
     btn_col1, btn_col2 = st.columns([1, 1])
-
     is_main = st.session_state.cases_source == "main"
     is_new = st.session_state.cases_source == "new"
 
     with btn_col1:
-        if st.button(
-            t("قاعدة البيانات", "Main Database"),
-            key="src_main",
-            use_container_width=True,
-            type="primary" if is_main else "secondary"
-        ):
+        if st.button(t("قاعدة البيانات", "Main Database"), key="src_main",
+                     use_container_width=True, type="primary" if is_main else "secondary"):
             st.session_state.cases_source = "main"
             st.rerun()
-
     with btn_col2:
-        if st.button(
-            t("الحالات الجديدة", "New Cases"),
-            key="src_new",
-            use_container_width=True,
-            type="primary" if is_new else "secondary"
-        ):
+        if st.button(t("الحالات الجديدة", "New Cases"), key="src_new",
+                     use_container_width=True, type="primary" if is_new else "secondary"):
             st.session_state.cases_source = "new"
             st.rerun()
-    st.markdown("</div></div></div>", unsafe_allow_html=True)
 
-    # CSS ديناميكي للزر المحدد
-    active_key = "src_main" if st.session_state.cases_source == "main" else "src_new"
-    st.markdown(f"""
-    <style>
-    div[data-testid="stButton"] button[kind="secondary"]:nth-of-type(1) {{}}
-    /* تلوين الزر النشط */
-    div[data-testid="column"]:has(div[data-testid="stButton"] button:focus) button {{
-        border-color: #d8ae34 !important;
-        color: #d8ae34 !important;
-    }}
-    </style>
-    <script>
-    const btns = window.parent.document.querySelectorAll('button');
-    btns.forEach(b => {{
-        if (b.innerText.includes('{"قاعدة البيانات" if st.session_state.cases_source == "main" else "الحالات الجديدة"}') ||
-            b.innerText.includes('{"Main Database" if st.session_state.cases_source == "main" else "New Cases"}')) {{
-            b.style.borderColor = '#d8ae34';
-            b.style.color = '#d8ae34';
-            b.style.boxShadow = '0 0 10px rgba(216,174,52,0.45)';
-        }}
-    }});
-    </script>
-    """, unsafe_allow_html=True)
-
-    # ── تحميل البيانات حسب الاختيار ──
+    # ── تحميل البيانات (مع caching للسرعة) ──
     if st.session_state.cases_source == "new":
-        try:
-            df = pd.read_csv("Database/new_cases.csv", dtype={"ssn": str})
-            df["ssn"] = df["ssn"].str.replace(".0", "", regex=False).str.strip()
-        except Exception:
-            df = pd.DataFrame()
+        df = load_new_cases()
 
     if df.empty:
         st.warning(t("لا توجد بيانات", "No data available"))
         return
 
-    # Search bar
-    col1, col2, col3 = st.columns([3, 2, 1])
-    with col1:
-        search_q = st.text_input(t(" بحث بالاسم أو الرقم القومي", " Search by Name or SSN"),
-                                 placeholder=t("اكتب اسم الحالة أو الرقم القومي...","Enter name or national ID..."),
-                                 key="case_search")
-    with col2:
-        gov_filter = st.selectbox(t("فلتر بالمحافظة", "Filter by Governorate"),
-                                  [t("الكل","All")] + sorted(df["governorate"].dropna().unique().tolist()) if "governorate" in df.columns else [t("الكل","All")])
-    with col3:
-        cluster_filter = st.selectbox(t("التصنيف", "Cluster"),
-                                      [t("الكل","All")] + [f"Cluster {i}" for i in range(4)])
-    st.markdown("</div>", unsafe_allow_html=True)
+    # ── فورم البحث والفلاتر: بيتفلتر بس عند الضغط على "بحث" أو Enter ──
+    with st.form("cases_search_form"):
+        col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+        with col1:
+            search_q = st.text_input(
+                t(" بحث بالاسم أو الرقم القومي", " Search by Name or SSN"),
+                placeholder=t("اكتب اسم الحالة أو الرقم القومي...", "Enter name or national ID..."),
+                key="case_search",
+            )
+        with col2:
+            gov_filter = st.selectbox(
+                t("فلتر بالمحافظة", "Filter by Governorate"),
+                [t("الكل", "All")] + sorted(df["governorate"].dropna().unique().tolist())
+                if "governorate" in df.columns else [t("الكل", "All")],
+            )
+        with col3:
+            cluster_filter = st.selectbox(
+                t("التصنيف", "Cluster"),
+                [t("الكل", "All")] + [f"Cluster {i}" for i in range(4)],
+            )
+        with col4:
+            st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+            search_submitted = st.form_submit_button(
+                t(" بحث", " Search"), use_container_width=True, type="primary"
+            )
 
     filtered = df.copy()
     if search_q:
@@ -1664,144 +1682,116 @@ def admin_cases(df):
             mask |= filtered["ssn"].astype(str).str.contains(search_q, case=False, na=False)
         filtered = filtered[mask]
 
-    if gov_filter != t("الكل","All") and "governorate" in filtered.columns:
+    if gov_filter != t("الكل", "All") and "governorate" in filtered.columns:
         filtered = filtered[filtered["governorate"] == gov_filter]
 
-    if cluster_filter != t("الكل","All") and "cluster" in filtered.columns:
+    if cluster_filter != t("الكل", "All") and "cluster" in filtered.columns:
         cid = int(cluster_filter.split(" ")[-1])
         filtered = filtered[filtered["cluster"] == cid]
 
     st.markdown(f"<div class='info-box'>{t(f'عدد النتائج: {len(filtered):,} حالة', f'Results: {len(filtered):,} cases')}</div>", unsafe_allow_html=True)
 
-    # Display table
+    # ── تحديد الحالة المختارة (من البحث بنتيجة واحدة، أو من الضغط على صف) ──
+    selected_row = None
+    if search_q and len(filtered) == 1:
+        selected_row = filtered.iloc[0]
+
+    # ── منطقة تفاصيل الحالة: تظهر فوق الجدول ──────────────────────
+    details_placeholder = st.container()
+
+    # Display table columns
     display_cols = [
-    "full_name",
-    "ssn",
-    "phone_number",
-    "age",
-    "gender",
-    "governorate",
-    "center",
-    "village",
-    "family_size",
-    "number_of_children",
-    "monthly_income",
-    "expenses_estimate",
-    "medical_cost_estimate",
-    "debt_amount",
-    "employment_status",
-    "education_level_head",
-    "children_in_school",
-    "chronic_disease",
-    "disabled_member",
-    "has_stable_job",
-    "willing_to_work",
-    "cluster",
-    "application_date",
-]
-
+        "full_name", "ssn", "phone_number", "age", "gender", "governorate",
+        "center", "village", "family_size", "number_of_children", "monthly_income",
+        "expenses_estimate", "medical_cost_estimate", "debt_amount", "employment_status",
+        "education_level_head", "children_in_school", "chronic_disease", "disabled_member",
+        "has_stable_job", "willing_to_work", "cluster", "application_date",
+    ]
     available_cols = [c for c in display_cols if c in filtered.columns]
-    show_df = filtered[available_cols].copy()
+    show_df = filtered[available_cols].copy().reset_index(drop=True)
 
-# تنظيف الرقم القومي
     if "ssn" in show_df.columns:
-        show_df["ssn"] = (
-            show_df["ssn"]
-            .astype(str)
-            .str.replace(".0", "", regex=False)
-            .str.strip()
-        )
+        show_df["ssn"] = show_df["ssn"].astype(str).str.replace(".0", "", regex=False).str.strip()
 
     if "cluster" in show_df.columns:
         show_df["cluster_label"] = show_df["cluster"].apply(
             lambda x: get_cluster_info(x, LANG)["name"] if pd.notna(x) else ""
         )
-
         show_df["cluster_id"] = show_df["cluster"]
-
         show_df = show_df.drop(columns=["cluster"])
-    
-    if "application_date" in show_df.columns:
-        show_df["application_date"] = pd.to_datetime(
-            show_df["application_date"],
-            errors="coerce"
-        ).dt.strftime("%Y-%m-%d")
 
-    # ── تحويل True/False لـ نعم/لا أو Yes/No للعرض فقط ──
+    if "application_date" in show_df.columns:
+        show_df["application_date"] = pd.to_datetime(show_df["application_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+
     bool_cols = ["chronic_disease", "disabled_member", "has_stable_job", "willing_to_work"]
     for bc in bool_cols:
         if bc in show_df.columns:
             show_df[bc] = show_df[bc].apply(
-                lambda v: t("نعم", "Yes") if str(v).lower() in ["true","1","yes","نعم"] else t("لا", "No")
+                lambda v: t("نعم", "Yes") if str(v).lower() in ["true", "1", "yes", "نعم"] else t("لا", "No")
             )
 
     col_rename = {
-    "full_name": t("الاسم", "Name"),
-    "ssn": t("الرقم القومي", "SSN"),
-    "phone_number": t("رقم الهاتف", "Phone"),
-    "age": t("السن", "Age"),
-    "gender": t("الجنس", "Gender"),
-    "governorate": t("المحافظة", "Governorate"),
-    "center": t("المركز", "Center"),
-    "village": t("القرية", "Village"),
-    "family_size": t("حجم الأسرة", "Family Size"),
-    "number_of_children": t("عدد الأطفال", "Children"),
-    "monthly_income": t("الدخل", "Income"),
-    "expenses_estimate": t("المصروفات", "Expenses"),
-    "medical_cost_estimate": t("تكلفة العلاج", "Medical Cost"),
-    "debt_amount": t("الديون", "Debt"),
-    "employment_status": t("حالة العمل", "Employment"),
-    "education_level_head": t("مستوى التعليم", "Education"),
-    "children_in_school": t("الأطفال في التعليم", "Children In School"),
-    "chronic_disease": t("مرض مزمن", "Chronic Disease"),
-    "disabled_member": t("فرد من ذوي الهمم", "Disabled Member"),
-    "has_stable_job": t("وظيفة مستقرة", "Stable Job"),
-    "willing_to_work": t("قابل للعمل", "Willing To Work"),
-    "cluster_label": t("التصنيف", "Classification"),
-    "cluster_id": t("رقم التصنيف", "Cluster ID"),
-    "application_date": t("تاريخ التسجيل", "Application Date"),
-}
+        "full_name": t("الاسم", "Name"), "ssn": t("الرقم القومي", "SSN"),
+        "phone_number": t("رقم الهاتف", "Phone"), "age": t("السن", "Age"),
+        "gender": t("الجنس", "Gender"), "governorate": t("المحافظة", "Governorate"),
+        "center": t("المركز", "Center"), "village": t("القرية", "Village"),
+        "family_size": t("حجم الأسرة", "Family Size"), "number_of_children": t("عدد الأطفال", "Children"),
+        "monthly_income": t("الدخل", "Income"), "expenses_estimate": t("المصروفات", "Expenses"),
+        "medical_cost_estimate": t("تكلفة العلاج", "Medical Cost"), "debt_amount": t("الديون", "Debt"),
+        "employment_status": t("حالة العمل", "Employment"), "education_level_head": t("مستوى التعليم", "Education"),
+        "children_in_school": t("الأطفال في التعليم", "Children In School"),
+        "chronic_disease": t("مرض مزمن", "Chronic Disease"), "disabled_member": t("فرد من ذوي الهمم", "Disabled Member"),
+        "has_stable_job": t("وظيفة مستقرة", "Stable Job"), "willing_to_work": t("قابل للعمل", "Willing To Work"),
+        "cluster_label": t("التصنيف", "Classification"), "cluster_id": t("رقم التصنيف", "Cluster ID"),
+        "application_date": t("تاريخ التسجيل", "Application Date"),
+    }
+    show_df.rename(columns={k: v for k, v in col_rename.items() if k in show_df.columns}, inplace=True)
 
-    show_df.rename(
-        columns={k: v for k, v in col_rename.items() if k in show_df.columns},
-        inplace=True
-    )
-
-    st.dataframe(
+    # ── الجدول مع تفعيل اختيار الصف (بديل الدبل كليك: كليك واحد على الصف) ──
+    event = st.dataframe(
         show_df,
         use_container_width=True,
         height=480,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="cases_table_select",
         column_config={
-        t("الدخل", "Income"): st.column_config.NumberColumn(format="EGP %.0f"),
-        t("المصروفات", "Expenses"): st.column_config.NumberColumn(format="EGP %.0f"),
-        t("الديون", "Debt"): st.column_config.NumberColumn(format="EGP %.0f"),
-    }
+            t("الدخل", "Income"): st.column_config.NumberColumn(format="EGP %.0f"),
+            t("المصروفات", "Expenses"): st.column_config.NumberColumn(format="EGP %.0f"),
+            t("الديون", "Debt"): st.column_config.NumberColumn(format="EGP %.0f"),
+        }
     )
-    # Detail view on search match
-    if search_q and len(filtered) == 1:
-        row = filtered.iloc[0]
+
+    # لو المستخدم دوس على صف في الجدول، هات تفاصيله
+    if event and event.selection and event.selection.get("rows"):
+        idx = event.selection["rows"][0]
+        selected_row = filtered.iloc[idx]
+
+    # ── رسم تفاصيل الحالة فوق (جوه الـ placeholder اللي عرفناه فوق) ──
+    if selected_row is not None:
+        row = selected_row
         cid = int(row["cluster"]) if "cluster" in row and pd.notna(row["cluster"]) else -1
-        cinfo = get_cluster_info(cid, LANG) if cid >= 0 else {"name": t("غير محدد","Unknown"), "desc": "", "color": "#95a5a6"}
+        cinfo = get_cluster_info(cid, LANG) if cid >= 0 else {"name": t("غير محدد", "Unknown"), "desc": "", "color": "#95a5a6"}
 
-        st.markdown(f"""
-        <div class='section-card'>
-            <div class='section-title'>👤 {t('تفاصيل الحالة','Case Details')}</div>
-            <div style='display:flex; gap:20px; flex-wrap:wrap; align-items:center; margin-bottom:16px;'>
-                <div>
-                    <h2 style='margin:0; color:#1a3a5c;'>{row.get('full_name','N/A')}</h2>
-                    <div style='color:#7f8c8d;'>{t('الرقم القومي:','SSN:')} {row.get('ssn','N/A')}</div>
+        with details_placeholder:
+            st.markdown(f"""
+            <div class='section-card'>
+                <div class='section-title'>👤 {t('تفاصيل الحالة','Case Details')}</div>
+                <div style='display:flex; gap:20px; flex-wrap:wrap; align-items:center; margin-bottom:16px;'>
+                    <div>
+                        <h2 style='margin:0; color:#1a3a5c;'>{row.get('full_name','N/A')}</h2>
+                        <div style='color:#7f8c8d;'>{t('الرقم القومي:','SSN:')} {row.get('ssn','N/A')}</div>
+                    </div>
+                    <span class='cluster-badge' style='background:{cinfo["color"]};'>{cinfo['name']}</span>
                 </div>
-                <span class='cluster-badge' style='background:{cinfo["color"]};'>{cinfo['name']}</span>
+                <p style='color:#555;'>{cinfo['desc']}</p>
             </div>
-            <p style='color:#555;'>{cinfo['desc']}</p>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric(t("الدخل الشهري","Monthly Income"), f"EGP {row.get('monthly_income', 0):,.0f}")
-        c2.metric(t("حجم الأسرة","Family Size"), row.get('family_size', 'N/A'))
-        c3.metric(t("عدد الأطفال","Children"), row.get('number_of_children', 'N/A'))
-
+            c1, c2, c3 = st.columns(3)
+            c1.metric(t("الدخل الشهري", "Monthly Income"), f"EGP {row.get('monthly_income', 0):,.0f}")
+            c2.metric(t("حجم الأسرة", "Family Size"), row.get('family_size', 'N/A'))
+            c3.metric(t("عدد الأطفال", "Children"), row.get('number_of_children', 'N/A'))
 
 def admin_add_case(df, models):
     scroll_to_top()
